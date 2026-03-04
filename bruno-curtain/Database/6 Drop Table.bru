@@ -1,0 +1,25 @@
+meta {
+  name: Drop Table
+  type: http
+  seq: 6
+}
+
+post {
+  url: {{base_url}}/db/v1/query
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": "DROP TABLE IF EXISTS public.products CASCADE"
+  }
+}

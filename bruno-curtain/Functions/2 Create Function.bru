@@ -1,0 +1,27 @@
+meta {
+  name: Create Function
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/functions/v1/functions
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "hello-world",
+    "slug": "hello-world",
+    "code": "export default async function handler(req) {\n  const body = await req.json().catch(() => ({}))\n  return new Response(JSON.stringify({ message: 'Hello from Curtain!', received: body }), { status: 200, headers: { 'Content-Type': 'application/json' } })\n}"
+  }
+}

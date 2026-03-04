@@ -1,0 +1,231 @@
+# =============================================================================
+# Curtain - Production Docker Compose
+# Deploy on: 1vCPU / 2GB RAM VPS (~₹269–450/month on Hostinger/Hetzner India)
+#
+# First run: cp .env.example .env && nano .env
+# Start:     docker compose up -d
+# =============================================================================
+
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+networks:
+  internal:
+    driver: bridge
+    internal: true      # Not reachable from outside; only Caddy can reach services
+  public:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  minio-data:
+  caddy-data:
+  caddy-config:
+
+services:
+
+  # ─── Gateway (Caddy) ────────────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    container_name: curtain-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - public
+      - internal
+    environment:
+      DOMAIN:      ${DOMAIN:?DOMAIN is required}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+    mem_limit: 64m
+    logging: *default-logging
+
+  # ─── Database (PostgreSQL 15) ────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: curtain-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-curtain}
+      POSTGRES_USER:     ${POSTGRES_USER:-curtain}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    networks:
+      - internal
+    mem_limit: 512m
+    command: >
+      postgres
+        -c config_file=/etc/postgresql/postgresql.conf
+        -c shared_buffers=128MB
+        -c effective_cache_size=512MB
+        -c work_mem=4MB
+        -c maintenance_work_mem=32MB
+        -c wal_level=logical
+        -c max_wal_senders=3
+        -c max_replication_slots=3
+        -c max_connections=50
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-curtain} -d ${POSTGRES_DB:-curtain}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  # ─── REST API (PostgREST) ────────────────────────────────────────────────────
+  postgrest:
+    image: postgrest/postgrest:v12.2.0
+    container_name: curtain-postgrest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI:                  "postgres://${POSTGRES_USER:-curtain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-curtain}"
+      PGRST_DB_SCHEMA:               "public,storage"
+      PGRST_DB_ANON_ROLE:            "anon"
+      PGRST_JWT_SECRET:              "${JWT_SECRET:?JWT_SECRET is required}"
+      PGRST_JWT_SECRET_IS_BASE64:    "false"
+      PGRST_DB_POOL:                  10
+      PGRST_DB_POOL_ACQUISITION_TIMEOUT: 10
+      PGRST_OPENAPI_SERVER_PROXY_URI: "https://${DOMAIN}/rest/v1"
+      PGRST_SERVER_CORS_ALLOWED_ORIGINS: "*"
+    networks:
+      - internal
+    mem_limit: 100m
+    logging: *default-logging
+
+  # ─── Auth Service (Go) ───────────────────────────────────────────────────────
+  auth:
+    build:
+      context: ../services/auth
+      dockerfile: Dockerfile
+    image: curtain-auth:latest
+    container_name: curtain-auth
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:          "postgres://${POSTGRES_USER:-curtain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-curtain}"
+      JWT_SECRET:            "${JWT_SECRET}"
+      JWT_EXPIRY:            "3600"
+      REFRESH_TOKEN_EXPIRY:  "604800"
+      GOOGLE_CLIENT_ID:      "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET:  "${GOOGLE_CLIENT_SECRET:-}"
+      SITE_URL:              "https://${DOMAIN}"
+      PORT:                  "9999"
+    networks:
+      - internal
+    mem_limit: 64m
+    logging: *default-logging
+
+  # ─── Realtime Service (Go) ───────────────────────────────────────────────────
+  realtime:
+    build:
+      context: ../services/realtime
+      dockerfile: Dockerfile
+    image: curtain-realtime:latest
+    container_name: curtain-realtime
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "postgres://${POSTGRES_USER:-curtain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-curtain}"
+      JWT_SECRET:   "${JWT_SECRET}"
+      PORT:         "4000"
+    networks:
+      - internal
+    mem_limit: 64m
+    logging: *default-logging
+
+  # ─── File Storage (MinIO) ────────────────────────────────────────────────────
+  storage:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    container_name: curtain-storage
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     "${MINIO_ROOT_USER:-minio}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}"
+    volumes:
+      - minio-data:/data
+    networks:
+      - internal
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  # MinIO init (runs once, then exits)
+  storage-init:
+    image: minio/mc:latest
+    container_name: curtain-storage-init
+    restart: "no"
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/init-buckets.sh"]
+    volumes:
+      - ./minio/init-buckets.sh:/init-buckets.sh:ro
+    environment:
+      MINIO_ROOT_USER:     "${MINIO_ROOT_USER:-minio}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+    networks:
+      - internal
+
+  # ─── Edge Functions (Go + Deno) ──────────────────────────────────────────────
+  edge:
+    build:
+      context: ../services/edge
+      dockerfile: Dockerfile
+    image: curtain-edge:latest
+    container_name: curtain-edge
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:        "postgres://${POSTGRES_USER:-curtain}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-curtain}"
+      JWT_SECRET:          "${JWT_SECRET}"
+      PORT:                "5555"
+      FUNCTION_TIMEOUT_MS: "5000"
+    volumes:
+      - /tmp/curtain-fn:/tmp/fn
+    networks:
+      - internal
+    mem_limit: 256m
+    logging: *default-logging
+
+  # ─── Dashboard (React SPA via nginx) ─────────────────────────────────────────
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "https://${DOMAIN}"
+    image: curtain-dashboard:latest
+    container_name: curtain-dashboard
+    restart: unless-stopped
+    networks:
+      - internal
+    mem_limit: 32m
+    logging: *default-logging

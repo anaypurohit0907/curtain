@@ -1,0 +1,25 @@
+meta {
+  name: Invoke Function
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/functions/v1/invoke/hello-world
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "name": "Alice"
+  }
+}

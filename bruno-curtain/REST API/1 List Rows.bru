@@ -1,0 +1,20 @@
+meta {
+  name: List Rows
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{base_url}}/rest/v1/products?select=*&limit=50
+  body: none
+  auth: bearer
+}
+
+headers {
+  Accept: application/json
+  Accept-Profile: public
+}
+
+auth:bearer {
+  token: {{token}}
+}

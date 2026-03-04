@@ -1,0 +1,83 @@
+# =============================================================================
+# Curtain Caddyfile - API Gateway
+# =============================================================================
+# This routes all traffic to the right internal service.
+# TLS is handled automatically by Caddy via Let's Encrypt.
+# =============================================================================
+
+{
+    # Disable Caddy admin API in production (security)
+    admin off
+    email {$ADMIN_EMAIL:admin@example.com}
+}
+
+{$DOMAIN:localhost} {
+
+    # ── REST API (PostgREST auto-generated from Postgres schema) ───────────────
+    handle /rest/v1/* {
+        uri strip_prefix /rest/v1
+        reverse_proxy postgrest:3000 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Auth Service ──────────────────────────────────────────────────────────
+    handle /auth/v1/* {
+        uri strip_prefix /auth/v1
+        reverse_proxy auth:9999 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Realtime (WebSocket - must preserve Upgrade header) ───────────────────
+    handle /realtime/v1/* {
+        uri strip_prefix /realtime/v1
+        reverse_proxy realtime:4000 {
+            header_up Host             {host}
+            header_up Connection       {>Connection}
+            header_up Upgrade          {>Upgrade}
+            transport http {
+                versions 1.1
+            }
+        }
+    }
+
+    # ── Storage (MinIO S3-compatible API) ──────────────────────────────────────
+    handle /storage/v1/* {
+        uri strip_prefix /storage/v1
+        reverse_proxy storage:9000 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Edge Functions ─────────────────────────────────────────────────────────
+    handle /functions/v1/* {
+        uri strip_prefix /functions/v1
+        reverse_proxy edge:5555 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Dashboard SPA (fallback: serve index.html for client-side routing) ────
+    handle {
+        reverse_proxy dashboard:80 {
+            header_up Host {host}
+        }
+    }
+
+    # ── Security headers ───────────────────────────────────────────────────────
+    header {
+        X-Content-Type-Options  "nosniff"
+        X-Frame-Options         "DENY"
+        X-XSS-Protection        "1; mode=block"
+        Referrer-Policy         "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # ── Access log ────────────────────────────────────────────────────────────
+    log {
+        output stdout
+        format json
+        level  INFO
+    }
+}
