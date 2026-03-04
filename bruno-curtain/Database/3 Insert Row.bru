@@ -1,0 +1,25 @@
+meta {
+  name: Insert Row
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{base_url}}/db/v1/query
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": "INSERT INTO public.products (name, price, description) VALUES ('Widget', 499, 'A nice widget') RETURNING *"
+  }
+}

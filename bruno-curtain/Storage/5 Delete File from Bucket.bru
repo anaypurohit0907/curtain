@@ -1,0 +1,15 @@
+meta {
+  name: Delete File from Bucket
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/storage/v1/public/uploads/myfile.jpg
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

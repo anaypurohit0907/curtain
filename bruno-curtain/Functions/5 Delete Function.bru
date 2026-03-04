@@ -1,0 +1,15 @@
+meta {
+  name: Delete Function
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/functions/v1/functions/REPLACE_WITH_FUNCTION_ID
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{token}}
+}

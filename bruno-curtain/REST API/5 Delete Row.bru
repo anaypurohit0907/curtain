@@ -1,0 +1,19 @@
+meta {
+  name: Delete Row (PostgREST)
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{base_url}}/rest/v1/products?id=eq.1
+  body: none
+  auth: bearer
+}
+
+headers {
+  Accept-Profile: public
+}
+
+auth:bearer {
+  token: {{token}}
+}

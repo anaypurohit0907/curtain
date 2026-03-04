@@ -1,0 +1,25 @@
+meta {
+  name: Run SQL Query — SELECT
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/db/v1/query
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": "SELECT * FROM auth.users ORDER BY created_at DESC LIMIT 20"
+  }
+}

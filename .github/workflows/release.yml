@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_ORG: ${{ github.repository_owner }}
+
+jobs:
+  # ── Validate before releasing ─────────────────────────────────────────────────
+  validate:
+    name: Pre-release validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test all Go services
+        run: |
+          cd services/auth     && go test ./... && cd ../..
+          cd services/realtime && go test ./... && cd ../..
+          cd services/edge     && go test ./... && cd ../..
+
+      - name: Test SDK
+        run: |
+          cd sdk && npm ci && npm test
+
+  # ── Build & push Docker images ────────────────────────────────────────────────
+  release-images:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    needs: validate
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - name: auth
+            context: services/auth
+          - name: realtime
+            context: services/realtime
+          - name: edge
+            context: services/edge
+          - name: dashboard
+            context: dashboard
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_ORG }}/curtain-${{ matrix.service.name }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Publish SDK to npm ────────────────────────────────────────────────────────
+  release-sdk:
+    name: Publish SDK to npm
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install & build
+        working-directory: sdk
+        run: npm ci && npm run build
+
+      - name: Publish
+        working-directory: sdk
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── Create GitHub Release ─────────────────────────────────────────────────────
+  github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [release-images, release-sdk]
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            CHANGES=$(git log --oneline "$PREV_TAG"..HEAD)
+          else
+            CHANGES=$(git log --oneline)
+          fi
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## Curtain ${{ github.ref_name }}
+
+            Self-hosted BaaS — Made in India 🇮🇳
+
+            ### Docker images
+            Pull the latest images:
+            ```bash
+            docker pull ghcr.io/${{ github.repository_owner }}/curtain-auth:${{ github.ref_name }}
+            docker pull ghcr.io/${{ github.repository_owner }}/curtain-realtime:${{ github.ref_name }}
+            docker pull ghcr.io/${{ github.repository_owner }}/curtain-edge:${{ github.ref_name }}
+            docker pull ghcr.io/${{ github.repository_owner }}/curtain-dashboard:${{ github.ref_name }}
+            ```
+
+            ### SDK
+            ```bash
+            npm install curtain@${{ github.ref_name }}
+            ```
+
+            ### Changes
+            ${{ steps.changelog.outputs.changes }}
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

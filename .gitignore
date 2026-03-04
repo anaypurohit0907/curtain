@@ -1,0 +1,55 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+infra/.env
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+*.lcov
+
+# Go binaries
+services/auth/auth
+services/realtime/realtime
+services/edge/edge
+services/storage-gw/storage-gw
+*.exe
+*.test
+
+# Go vendor (if using vendor mode)
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker volumes / local infra data
+infra/postgres/data/
+infra/minio/data/
+
+# Logs
+*.log
+logs/

@@ -1,0 +1,25 @@
+meta {
+  name: Update Row
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{base_url}}/db/v1/query
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": "UPDATE public.products SET price = 599 WHERE id = 1 RETURNING *"
+  }
+}

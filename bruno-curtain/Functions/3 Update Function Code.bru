@@ -1,0 +1,25 @@
+meta {
+  name: Update Function Code
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{base_url}}/functions/v1/functions/REPLACE_WITH_FUNCTION_ID
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "code": "export default async function handler(req) {\n  return new Response(JSON.stringify({ version: 2, updated: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })\n}"
+  }
+}

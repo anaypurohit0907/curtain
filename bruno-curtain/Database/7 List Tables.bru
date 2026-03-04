@@ -1,0 +1,25 @@
+meta {
+  name: List Tables
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{base_url}}/db/v1/query
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "query": "SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog', 'information_schema') ORDER BY table_schema, table_name"
+  }
+}

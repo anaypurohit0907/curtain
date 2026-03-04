@@ -1,0 +1,29 @@
+meta {
+  name: Update Row (PostgREST)
+  type: http
+  seq: 4
+}
+
+patch {
+  url: {{base_url}}/rest/v1/products?id=eq.1
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+  Accept-Profile: public
+  Content-Profile: public
+  Prefer: return=representation
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "price": 599,
+    "active": true
+  }
+}

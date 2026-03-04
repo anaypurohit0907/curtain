@@ -1,0 +1,28 @@
+meta {
+  name: Update User Metadata
+  type: http
+  seq: 6
+}
+
+put {
+  url: {{base_url}}/auth/v1/user
+  body: json
+  auth: bearer
+}
+
+headers {
+  Content-Type: application/json
+}
+
+auth:bearer {
+  token: {{token}}
+}
+
+body:json {
+  {
+    "metadata": {
+      "display_name": "Alice",
+      "avatar_url": "https://example.com/avatar.jpg"
+    }
+  }
+}
