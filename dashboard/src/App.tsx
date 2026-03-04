@@ -123,11 +123,8 @@ function LoginPage({ onLogin }: LoginPageProps) {
         {/* Logo area */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-3">
-            <span className="text-3xl font-bold tracking-tight" style={{ color: '#e5e5e5' }}>
-              India
-            </span>
             <span className="text-3xl font-bold tracking-tight" style={{ color: '#f97316' }}>
-              BaaS
+              Curtain
             </span>
           </div>
           <p className="text-sm" style={{ color: '#6b7280' }}>
@@ -345,11 +342,8 @@ function Dashboard({ token, onSignOut }: DashboardProps) {
           className="flex items-center gap-2 px-4 py-4 border-b"
           style={{ borderColor: '#2a2a2a' }}
         >
-          <span className="text-lg font-bold" style={{ color: '#e5e5e5' }}>
-            India
-          </span>
           <span className="text-lg font-bold" style={{ color: '#f97316' }}>
-            BaaS
+            Curtain
           </span>
         </div>
 
